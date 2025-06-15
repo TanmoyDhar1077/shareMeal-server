@@ -2,3 +2,4 @@ node_modules
 
 # Server
 .env
+firebase-service-account.json
