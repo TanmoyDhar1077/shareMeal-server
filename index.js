@@ -53,7 +53,8 @@ async function run() {
     await client.connect();
     const foodCollection = client.db("shareMealDB").collection("foods");
 
-    // Protected GET Route
+    // Protected GET Route to fetch all foods (verifyToken) middleware add
+    // Unprotected GET Route to fetch all foods
     app.get("/foods", verifyToken, async (req, res) => {
       try {
         const result = await foodCollection.find().toArray();
@@ -63,6 +64,24 @@ async function run() {
           .status(500)
           .send({ message: "Failed to fetch foods", error: err.message });
       }
+    });
+
+    // Unprotected GET Route to fetch available foods
+    app.get("/foods-available", verifyToken, async (req, res) => {
+      const search = req.query.search || "";
+      const sortOrder = req.query.sort === "desc" ? -1 : 1;
+
+      const query = {
+        status: "available",
+        name: { $regex: search, $options: "i" },
+      };
+
+      const foods = await foodCollection
+        .find(query)
+        .sort({ expireAt: sortOrder })
+        .toArray();
+
+      res.send(foods);
     });
 
     // Protected POST Route
