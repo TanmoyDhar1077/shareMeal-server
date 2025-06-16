@@ -2,7 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const admin = require("firebase-admin");
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
 dotenv.config();
 
@@ -98,6 +98,23 @@ async function run() {
         res
           .status(500)
           .send({ message: "Database error", error: error.message });
+      }
+    });
+
+    // For single food details
+    app.get("/food/:id", verifyToken, async (req, res) => {
+      const id = req.params.id;
+
+      try {
+        const food = await foodCollection.findOne({ _id: new ObjectId(id) });
+        if (!food) {
+          return res.status(404).send({ message: "Food not found" });
+        }
+        res.send(food);
+      } catch (error) {
+        res
+          .status(500)
+          .send({ message: "Error fetching food", error: error.message });
       }
     });
 
