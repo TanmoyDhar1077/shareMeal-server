@@ -88,12 +88,10 @@ async function run() {
 
         res.send(foods);
       } catch (err) {
-        res
-          .status(500)
-          .send({
-            message: "Failed to fetch available foods",
-            error: err.message,
-          });
+        res.status(500).send({
+          message: "Failed to fetch available foods",
+          error: err.message,
+        });
       }
     });
 
@@ -145,10 +143,8 @@ async function run() {
       }
 
       try {
-        
         const insertResult = await foodRequestCollection.insertOne(request);
 
-        
         const updateResult = await foodCollection.updateOne(
           { _id: new ObjectId(request.foodId) },
           { $set: { status: "requested" } }
@@ -179,12 +175,29 @@ async function run() {
 
         res.send(myRequests);
       } catch (err) {
+        res.status(500).send({
+          message: "Failed to fetch your requests",
+          error: err.message,
+        });
+      }
+    });
+
+    // Protected: Get Foods by Logged-in User
+    app.get("/my-foods", verifyToken, async (req, res) => {
+      const email = req.query.email;
+      if (!email || email !== req.user.email) {
+        return res.status(403).send({ message: "Forbidden access" });
+      }
+
+      try {
+        const myFoods = await foodCollection
+          .find({ donorEmail: email })
+          .toArray();
+        res.send(myFoods);
+      } catch (err) {
         res
           .status(500)
-          .send({
-            message: "Failed to fetch your requests",
-            error: err.message,
-          });
+          .send({ message: "Failed to fetch your foods", error: err.message });
       }
     });
 
