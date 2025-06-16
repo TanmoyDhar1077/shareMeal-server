@@ -5,7 +5,6 @@ const admin = require("firebase-admin");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
 dotenv.config();
-
 const app = express();
 const port = process.env.PORT || 5000;
 
@@ -51,10 +50,15 @@ const verifyToken = async (req, res, next) => {
 async function run() {
   try {
     await client.connect();
-    const foodCollection = client.db("shareMealDB").collection("foods");
 
-    // Protected GET Route to fetch all foods (verifyToken) middleware add
-    // Unprotected GET Route to fetch all foods
+    const db = client.db("shareMealDB");
+    const foodCollection = db.collection("foods");
+    const foodRequestCollection = db.collection("foodRequests");
+
+    // Home check
+    app.get("/", (req, res) => res.send("Server is running"));
+
+    // Protected: Get All Foods
     app.get("/foods", verifyToken, async (req, res) => {
       try {
         const result = await foodCollection.find().toArray();
@@ -66,7 +70,7 @@ async function run() {
       }
     });
 
-    // Unprotected GET Route to fetch available foods
+    // Protected: Get Available Foods (with search & sort)
     app.get("/foods-available", verifyToken, async (req, res) => {
       const search = req.query.search || "";
       const sortOrder = req.query.sort === "desc" ? -1 : 1;
@@ -76,15 +80,24 @@ async function run() {
         name: { $regex: search, $options: "i" },
       };
 
-      const foods = await foodCollection
-        .find(query)
-        .sort({ expireAt: sortOrder })
-        .toArray();
+      try {
+        const foods = await foodCollection
+          .find(query)
+          .sort({ expireAt: sortOrder })
+          .toArray();
 
-      res.send(foods);
+        res.send(foods);
+      } catch (err) {
+        res
+          .status(500)
+          .send({
+            message: "Failed to fetch available foods",
+            error: err.message,
+          });
+      }
     });
 
-    // Protected POST Route
+    // Protected: Add a New Food
     app.post("/foods", verifyToken, async (req, res) => {
       const foodData = req.body;
       if (!foodData.name || !foodData.img || !foodData.location) {
@@ -101,15 +114,14 @@ async function run() {
       }
     });
 
-    // For single food details
+    // Protected: Get Single Food Details
     app.get("/food/:id", verifyToken, async (req, res) => {
       const id = req.params.id;
 
       try {
         const food = await foodCollection.findOne({ _id: new ObjectId(id) });
-        if (!food) {
-          return res.status(404).send({ message: "Food not found" });
-        }
+        if (!food) return res.status(404).send({ message: "Food not found" });
+
         res.send(food);
       } catch (error) {
         res
@@ -118,13 +130,71 @@ async function run() {
       }
     });
 
-    // Initial check
-    app.get("/", (req, res) => res.send("Server is running"));
+    //  Protected: Request Food
+    app.post("/request-food", verifyToken, async (req, res) => {
+      const request = req.body;
+      if (
+        !request.foodId ||
+        !request.donorName ||
+        !request.userEmail ||
+        !request.requestDate
+      ) {
+        return res
+          .status(400)
+          .send({ message: "Missing required request data" });
+      }
 
-    // Start server
-    app.listen(port, () => console.log(`Server running on port ${port}`));
+      try {
+        
+        const insertResult = await foodRequestCollection.insertOne(request);
+
+        
+        const updateResult = await foodCollection.updateOne(
+          { _id: new ObjectId(request.foodId) },
+          { $set: { status: "requested" } }
+        );
+
+        res.send({
+          insertedId: insertResult.insertedId,
+          updated: updateResult.modifiedCount,
+        });
+      } catch (err) {
+        res.status(500).send({ message: "Request failed", error: err.message });
+      }
+    });
+
+    //  Protected: Get My Food Requests
+    app.get("/my-requests", verifyToken, async (req, res) => {
+      const email = req.query.email;
+
+      if (!email || email !== req.user.email) {
+        return res.status(403).send({ message: "Forbidden access" });
+      }
+
+      try {
+        const myRequests = await foodRequestCollection
+          .find({ userEmail: email })
+          .sort({ requestDate: -1 })
+          .toArray();
+
+        res.send(myRequests);
+      } catch (err) {
+        res
+          .status(500)
+          .send({
+            message: "Failed to fetch your requests",
+            error: err.message,
+          });
+      }
+    });
+
+    // Start the server
+    app.listen(port, () => {
+      console.log(`Server running on port ${port}`);
+    });
   } catch (err) {
     console.error("MongoDB connection error:", err);
   }
 }
+
 run();
