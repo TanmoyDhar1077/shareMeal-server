@@ -201,6 +201,56 @@ async function run() {
       }
     });
 
+    // Protected: Delete a food
+    app.delete("/foods/:id", verifyToken, async (req, res) => {
+      const id = req.params.id;
+
+      try {
+        const food = await foodCollection.findOne({ _id: new ObjectId(id) });
+
+        // Only allow deletion if logged-in user is the owner
+        if (!food || food.donorEmail !== req.user.email) {
+          return res
+            .status(403)
+            .send({ message: "Unauthorized to delete this food" });
+        }
+
+        const result = await foodCollection.deleteOne({
+          _id: new ObjectId(id),
+        });
+        res.send({ deletedCount: result.deletedCount });
+      } catch (error) {
+        res
+          .status(500)
+          .send({ message: "Error deleting food", error: error.message });
+      }
+    });
+
+    // Protected: Update Food by ID
+    app.put("/food/:id", verifyToken, async (req, res) => {
+      const id = req.params.id;
+      const updatedData = req.body;
+
+      try {
+        const result = await foodCollection.updateOne(
+          { _id: new ObjectId(id), donorEmail: req.user.email },
+          { $set: updatedData }
+        );
+
+        if (result.matchedCount === 0) {
+          return res
+            .status(404)
+            .send({ message: "Food not found or unauthorized" });
+        }
+
+        res.send({ updatedCount: result.modifiedCount });
+      } catch (error) {
+        res
+          .status(500)
+          .send({ message: "Update failed", error: error.message });
+      }
+    });
+
     // Start the server
     app.listen(port, () => {
       console.log(`Server running on port ${port}`);
