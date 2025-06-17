@@ -58,20 +58,27 @@ async function run() {
     // Home check
     app.get("/", (req, res) => res.send("Server is running"));
 
-    // Protected: Get All Foods
-    app.get("/foods", verifyToken, async (req, res) => {
+    // Not Protected: Get All Foods
+    app.get("/foods", async (req, res) => {
       try {
-        const result = await foodCollection.find().toArray();
+        const result = await foodCollection
+          .aggregate([
+            { $addFields: { availableInt: { $toInt: "$available" } } },
+            { $sort: { availableInt: -1 } },
+          ])
+          .toArray();
+
         res.send(result);
       } catch (err) {
-        res
-          .status(500)
-          .send({ message: "Failed to fetch foods", error: err.message });
+        res.status(500).send({
+          message: "Failed to fetch foods",
+          error: err.message,
+        });
       }
     });
 
-    // Protected: Get Available Foods (with search & sort)
-    app.get("/foods-available", verifyToken, async (req, res) => {
+    //Not Protected: Get Available Foods (with search & sort)
+    app.get("/foods-available", async (req, res) => {
       const search = req.query.search || "";
       const sortOrder = req.query.sort === "desc" ? -1 : 1;
 
